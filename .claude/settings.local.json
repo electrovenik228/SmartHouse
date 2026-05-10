@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(///wsl.localhost/Ubuntu-24.04/home/aman/**)",
+      "Bash(dir \"\\\\\\\\\\\\\\\\wsl.localhost\\\\\\\\Ubuntu-24.04\\\\\\\\home\\\\\\\\aman\\\\\\\\SmartHouse\")",
+      "Bash(wsl -e bash -c \"ls -la ~/SmartHouse/\")",
+      "Bash(wsl -e bash -c \"mkdir -p ~/SmartHouse/backend/app/services && echo done\")",
+      "Bash(wsl -e bash -c \"flutter --version 2>&1 | head -3\")",
+      "PowerShell(flutter --version 2>&1)",
+      "Bash(wsl -e bash -c \"mkdir -p ~/SmartHouse/mobile/lib/{core,models,providers,screens,widgets} && echo done\")",
+      "Bash(wsl -e bash -c \"mkdir -p ~/SmartHouse/mobile/android/app/src/main && echo done\")",
+      "PowerShell(java -version 2>&1)",
+      "PowerShell(dart --version 2>&1)",
+      "PowerShell($env:PROCESSOR_ARCHITECTURE; \\(Get-WmiObject Win32_OperatingSystem\\).OSArchitecture)"
+    ]
+  }
+}

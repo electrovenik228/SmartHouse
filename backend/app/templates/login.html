@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHome — Вход</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    body { background: radial-gradient(ellipse at 60% 0%, #1e3a5f 0%, #0f172a 60%); }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+  <div x-data="loginForm()" class="w-full max-w-md">
+
+    <!-- Brand -->
+    <div class="text-center mb-10">
+      <div class="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-blue-600/20 border border-blue-500/30 mb-4 text-4xl">
+        🏠
+      </div>
+      <h1 class="text-3xl font-bold text-white tracking-tight">SmartHome</h1>
+      <p class="text-slate-400 mt-2 text-sm">Система управления умным домом</p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-slate-800/80 backdrop-blur-sm rounded-2xl shadow-2xl border border-slate-700/50 p-8">
+      <h2 class="text-lg font-semibold text-white mb-6">Войдите в аккаунт</h2>
+
+      <!-- Error -->
+      <div x-show="error" x-cloak
+           class="flex items-center gap-2 bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 mb-5 text-sm">
+        <span>⚠</span>
+        <span x-text="error"></span>
+      </div>
+
+      <form @submit.prevent="login()">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-300 mb-1.5">Имя пользователя</label>
+          <input
+            type="text"
+            x-model="username"
+            placeholder="admin"
+            autocomplete="username"
+            class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+          >
+        </div>
+
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-slate-300 mb-1.5">Пароль</label>
+          <input
+            type="password"
+            x-model="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-3 text-white placeholder-slate-500
+                   focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
+          >
+        </div>
+
+        <button
+          type="submit"
+          :disabled="loading"
+          class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed
+                 text-white font-semibold rounded-xl py-3 transition duration-200 text-sm shadow-lg shadow-blue-600/20"
+        >
+          <span x-show="!loading">Войти</span>
+          <span x-show="loading" x-cloak class="flex items-center justify-center gap-2">
+            <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+            </svg>
+            Вхожу...
+          </span>
+        </button>
+      </form>
+
+      <!-- Hint -->
+      <div class="mt-6 p-4 bg-slate-700/40 rounded-xl border border-slate-700/50">
+        <p class="text-xs font-medium text-slate-400 mb-2">Тестовые аккаунты:</p>
+        <div class="space-y-1">
+          <p class="text-xs text-slate-400">
+            <span class="text-yellow-400">👑</span>
+            <span class="text-slate-200 font-mono">admin</span> / admin123
+            <span class="ml-1 text-slate-500">— администратор</span>
+          </p>
+          <p class="text-xs text-slate-400">
+            <span class="text-blue-400">👤</span>
+            <span class="text-slate-200 font-mono">guest</span> / guest123
+            <span class="ml-1 text-slate-500">— гость</span>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Redirect if already logged in
+    if (localStorage.getItem('token')) window.location.href = '/dashboard';
+
+    function loginForm() {
+      return {
+        username: '',
+        password: '',
+        error: '',
+        loading: false,
+
+        async login() {
+          this.error = '';
+          this.loading = true;
+          try {
+            const form = new URLSearchParams();
+            form.append('username', this.username);
+            form.append('password', this.password);
+
+            const res = await fetch('/api/v1/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: form,
+            });
+
+            if (!res.ok) {
+              this.error = 'Неверное имя пользователя или пароль';
+              return;
+            }
+
+            const data = await res.json();
+            localStorage.setItem('token', data.access_token);
+            window.location.href = '/dashboard';
+          } catch {
+            this.error = 'Ошибка подключения к серверу';
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

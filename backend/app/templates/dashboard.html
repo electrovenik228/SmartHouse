@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHome — Панель управления</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .toggle-thumb { transition: transform 0.2s cubic-bezier(.4,0,.2,1); }
+    .toggle-track { transition: background-color 0.2s ease; }
+    .device-row { transition: background-color 0.15s ease; }
+    .pulse-dot {
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-white" x-data="dashboard()" x-init="init()">
+
+  <!-- ───────────── SIDEBAR ───────────── -->
+  <aside class="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700/60 flex flex-col z-20">
+
+    <!-- Logo -->
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700/60">
+      <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-xl flex-shrink-0">🏠</div>
+      <div>
+        <p class="font-bold text-white text-sm leading-tight">SmartHome</p>
+        <p class="text-xs text-slate-500">Умный дом</p>
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <a href="/dashboard"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-600/15 text-blue-400 font-medium text-sm border border-blue-500/20">
+        <span class="text-base">📊</span> Панель управления
+      </a>
+      <a href="/history"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-700/60 hover:text-white transition text-sm">
+        <span class="text-base">📋</span> История действий
+      </a>
+      <a href="/docs" target="_blank"
+         class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-700/60 hover:text-white transition text-sm">
+        <span class="text-base">📖</span> API Документация
+      </a>
+    </nav>
+
+    <!-- Footer -->
+    <div class="px-3 pb-4 space-y-2 border-t border-slate-700/60 pt-3">
+      <!-- WS status -->
+      <div class="flex items-center gap-2 px-2 py-1">
+        <span class="w-2 h-2 rounded-full flex-shrink-0 pulse-dot"
+              :class="wsConnected ? 'bg-emerald-400' : 'bg-amber-400'"></span>
+        <span class="text-xs text-slate-400"
+              x-text="wsConnected ? 'Реальное время (live)' : 'Переподключение...'"></span>
+      </div>
+
+      <!-- User -->
+      <div x-show="user" x-cloak
+           class="flex items-center gap-2.5 p-2.5 bg-slate-700/40 rounded-xl border border-slate-700/50">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0"
+             x-text="user?.username?.[0]?.toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-white truncate leading-tight" x-text="user?.username"></p>
+          <p class="text-xs text-slate-400 leading-tight" x-text="user?.is_admin ? '👑 Администратор' : '👤 Гость'"></p>
+        </div>
+      </div>
+
+      <!-- Logout -->
+      <button @click="logout()"
+              class="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700/60 rounded-xl transition">
+        <span>🚪</span> Выйти
+      </button>
+    </div>
+  </aside>
+
+  <!-- ───────────── MAIN ───────────── -->
+  <main class="ml-64 min-h-screen p-8">
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-white">Панель управления</h1>
+        <p class="text-slate-400 text-sm mt-0.5">Управление устройствами умного дома</p>
+      </div>
+      <!-- Admin: add room -->
+      <button x-show="user?.is_admin" x-cloak
+              @click="showAddRoom = true"
+              class="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 rounded-xl text-sm font-medium transition shadow-lg shadow-blue-600/20">
+        <span class="text-base">＋</span> Добавить комнату
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div class="bg-slate-800 rounded-xl p-4 border border-slate-700/60">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Комнат</p>
+        <p class="text-3xl font-bold text-white mt-1.5" x-text="rooms.length">—</p>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4 border border-slate-700/60">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Устройств</p>
+        <p class="text-3xl font-bold text-white mt-1.5" x-text="totalDevices">—</p>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4 border border-slate-700/60">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Активных</p>
+        <p class="text-3xl font-bold text-emerald-400 mt-1.5" x-text="activeDevices">—</p>
+      </div>
+      <div class="bg-slate-800 rounded-xl p-4 border border-slate-700/60">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wider">Соединение</p>
+        <p class="text-sm font-bold mt-2"
+           :class="wsConnected ? 'text-emerald-400' : 'text-amber-400'"
+           x-text="wsConnected ? '● Онлайн' : '● Ожидание'">—</p>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading" x-cloak class="flex items-center justify-center py-24">
+      <div class="text-center">
+        <svg class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <p class="text-slate-400 text-sm">Загрузка данных...</p>
+      </div>
+    </div>
+
+    <!-- Rooms grid -->
+    <div x-show="!loading" class="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+      <template x-for="room in rooms" :key="room.id">
+        <div class="bg-slate-800 rounded-2xl border border-slate-700/60 overflow-hidden flex flex-col">
+
+          <!-- Room header -->
+          <div class="flex items-center justify-between px-5 py-4 border-b border-slate-700/60">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 rounded-xl bg-slate-700/60 flex items-center justify-center text-xl flex-shrink-0"
+                   x-text="roomIcon(room.icon)"></div>
+              <div class="min-w-0">
+                <h3 class="font-semibold text-white text-sm truncate" x-text="room.name"></h3>
+                <p class="text-xs text-slate-500 mt-0.5"
+                   x-text="`${room.devices?.length || 0} устройств · ${room.devices?.filter(d=>d.is_on).length || 0} активных`"></p>
+              </div>
+            </div>
+            <!-- Admin buttons -->
+            <div class="flex items-center gap-1 flex-shrink-0 ml-2">
+              <button x-show="user?.is_admin"
+                      @click="newDevice.room_id = room.id; showAddDevice = true"
+                      title="Добавить устройство"
+                      class="p-1.5 text-slate-500 hover:text-blue-400 hover:bg-slate-700 rounded-lg transition text-sm font-bold">＋</button>
+              <button x-show="user?.is_admin"
+                      @click="deleteRoom(room)"
+                      title="Удалить комнату"
+                      class="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-700 rounded-lg transition text-sm">🗑</button>
+            </div>
+          </div>
+
+          <!-- Devices -->
+          <div class="flex-1 p-3 space-y-1">
+            <template x-if="!room.devices || room.devices.length === 0">
+              <div class="flex flex-col items-center justify-center py-8 text-slate-600">
+                <span class="text-3xl mb-2">📭</span>
+                <p class="text-xs">Нет устройств</p>
+              </div>
+            </template>
+
+            <template x-for="device in room.devices" :key="device.id">
+              <div class="device-row flex items-center gap-3 p-3 rounded-xl group hover:bg-slate-700/40"
+                   :class="device.is_on && !isSensor(device.type) ? 'bg-slate-700/20' : ''">
+
+                <!-- Icon -->
+                <div class="w-9 h-9 rounded-xl flex items-center justify-center text-lg flex-shrink-0 transition"
+                     :class="device.is_on ? 'bg-blue-600/25 ring-1 ring-blue-500/30' : 'bg-slate-700/50'">
+                  <span x-text="deviceIcon(device.type)"></span>
+                </div>
+
+                <!-- Name & type -->
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-white truncate leading-tight" x-text="device.name"></p>
+                  <p class="text-xs text-slate-500 leading-tight mt-0.5" x-text="deviceLabel(device.type)"></p>
+                </div>
+
+                <!-- Control -->
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  <!-- Admin delete -->
+                  <button x-show="user?.is_admin"
+                          @click="deleteDevice(device)"
+                          class="p-1 text-transparent group-hover:text-slate-600 hover:!text-red-400 transition rounded">✕</button>
+
+                  <!-- Temp sensor -->
+                  <template x-if="device.type === 'TEMP_SENSOR'">
+                    <div class="text-right">
+                      <span class="text-base font-bold"
+                            :class="device.value > 26 ? 'text-red-400' : device.value < 18 ? 'text-blue-400' : 'text-amber-400'"
+                            x-text="device.value !== null ? device.value.toFixed(1) + '°C' : '—'"></span>
+                    </div>
+                  </template>
+
+                  <!-- Motion sensor -->
+                  <template x-if="device.type === 'MOTION_SENSOR'">
+                    <div class="px-2.5 py-1 rounded-lg text-xs font-medium transition"
+                         :class="device.is_on
+                           ? 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20'
+                           : 'bg-slate-700/50 text-slate-400'">
+                      <span x-text="device.is_on ? '● Движение' : '○ Тихо'"></span>
+                    </div>
+                  </template>
+
+                  <!-- Toggle -->
+                  <template x-if="isControllable(device.type)">
+                    <button @click="toggle(device)"
+                            class="toggle-track relative inline-flex h-6 w-11 items-center rounded-full cursor-pointer flex-shrink-0"
+                            :class="device.is_on ? 'bg-blue-600' : 'bg-slate-600'">
+                      <span class="toggle-thumb inline-block h-4 w-4 rounded-full bg-white shadow-sm"
+                            :class="device.is_on ? 'translate-x-6' : 'translate-x-1'"></span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </template>
+
+      <!-- Empty state -->
+      <template x-if="!loading && rooms.length === 0">
+        <div class="col-span-full flex flex-col items-center justify-center py-24 text-slate-600">
+          <span class="text-5xl mb-4">🏠</span>
+          <p class="text-lg font-medium text-slate-500">Нет комнат</p>
+          <p class="text-sm mt-1" x-show="user?.is_admin">Нажмите «Добавить комнату» чтобы начать</p>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <!-- ───────────── MODAL: Add Room ───────────── -->
+  <div x-show="showAddRoom" x-cloak
+       class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+       @click.self="showAddRoom = false">
+    <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-sm border border-slate-700/60 shadow-2xl">
+      <h3 class="text-base font-semibold text-white mb-5">Добавить комнату</h3>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Название</label>
+        <input x-model="newRoom.name" type="text" placeholder="Гостиная"
+               class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-500
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Иконка</label>
+        <select x-model="newRoom.icon"
+                class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-2.5 text-white
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <option value="home">🏠 Дом</option>
+          <option value="sofa">🛋️ Гостиная</option>
+          <option value="bed">🛏️ Спальня</option>
+          <option value="kitchen">🍳 Кухня</option>
+          <option value="bathroom">🚿 Ванная</option>
+          <option value="garage">🚗 Гараж</option>
+          <option value="garden">🌿 Сад</option>
+          <option value="office">💼 Офис</option>
+        </select>
+      </div>
+
+      <div class="flex gap-3">
+        <button @click="showAddRoom = false"
+                class="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition text-sm font-medium">
+          Отмена
+        </button>
+        <button @click="addRoom()"
+                class="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition text-sm font-medium">
+          Создать
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ───────────── MODAL: Add Device ───────────── -->
+  <div x-show="showAddDevice" x-cloak
+       class="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+       @click.self="showAddDevice = false">
+    <div class="bg-slate-800 rounded-2xl p-6 w-full max-w-sm border border-slate-700/60 shadow-2xl">
+      <h3 class="text-base font-semibold text-white mb-5">Добавить устройство</h3>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Название</label>
+        <input x-model="newDevice.name" type="text" placeholder="Умная лампа"
+               class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-2.5 text-white placeholder-slate-500
+                      focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Тип устройства</label>
+        <select x-model="newDevice.type"
+                class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-2.5 text-white
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <option value="LIGHT">💡 Освещение</option>
+          <option value="AC">❄️ Кондиционер</option>
+          <option value="OUTLET">🔌 Розетка</option>
+          <option value="CAMERA">📷 Камера</option>
+          <option value="TEMP_SENSOR">🌡️ Датчик температуры</option>
+          <option value="MOTION_SENSOR">👁️ Датчик движения</option>
+        </select>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5">Комната</label>
+        <select x-model.number="newDevice.room_id"
+                class="w-full bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-2.5 text-white
+                       focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+          <option value="" disabled>Выберите комнату</option>
+          <template x-for="room in rooms" :key="room.id">
+            <option :value="room.id" x-text="roomIcon(room.icon) + ' ' + room.name"></option>
+          </template>
+        </select>
+      </div>
+
+      <div class="flex gap-3">
+        <button @click="showAddDevice = false"
+                class="flex-1 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl transition text-sm font-medium">
+          Отмена
+        </button>
+        <button @click="addDevice()"
+                class="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition text-sm font-medium">
+          Добавить
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function dashboard() {
+    return {
+      user: null,
+      rooms: [],
+      ws: null,
+      wsConnected: false,
+      loading: true,
+      showAddRoom: false,
+      showAddDevice: false,
+      newRoom: { name: '', icon: 'home' },
+      newDevice: { name: '', type: 'LIGHT', room_id: null },
+
+      get totalDevices() {
+        return this.rooms.reduce((s, r) => s + (r.devices?.length || 0), 0);
+      },
+      get activeDevices() {
+        return this.rooms.reduce((s, r) => s + (r.devices?.filter(d => d.is_on).length || 0), 0);
+      },
+
+      async init() {
+        if (!localStorage.getItem('token')) { window.location.href = '/login'; return; }
+        await this.loadUser();
+        await this.loadRooms();
+        this.connectWS();
+      },
+
+      token() { return localStorage.getItem('token'); },
+
+      async api(path, opts = {}) {
+        try {
+          const res = await fetch('/api/v1' + path, {
+            ...opts,
+            headers: { 'Authorization': 'Bearer ' + this.token(), ...opts.headers },
+          });
+          if (res.status === 401) { this.logout(); return null; }
+          return res;
+        } catch {
+          return null;
+        }
+      },
+
+      async loadUser() {
+        const res = await this.api('/auth/me');
+        if (res?.ok) this.user = await res.json();
+      },
+
+      async loadRooms() {
+        this.loading = true;
+        try {
+          const res = await this.api('/rooms/');
+          if (!res?.ok) return;
+          const list = await res.json();
+
+          await Promise.all(list.map(async room => {
+            const dr = await this.api('/rooms/' + room.id + '/devices');
+            room.devices = dr?.ok ? await dr.json() : [];
+          }));
+
+          this.rooms = list;
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async toggle(device) {
+        const prev = device.is_on;
+        device.is_on = !prev;
+        const res = await this.api('/devices/' + device.id + '/toggle', { method: 'POST' });
+        if (res?.ok) {
+          const updated = await res.json();
+          Object.assign(device, updated);
+        } else {
+          device.is_on = prev;
+        }
+      },
+
+      updateDevice(data) {
+        for (const room of this.rooms) {
+          const d = room.devices?.find(d => d.id === data.id);
+          if (d) { Object.assign(d, data); break; }
+        }
+      },
+
+      connectWS() {
+        const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+        this.ws = new WebSocket(proto + '//' + location.host + '/api/v1/ws');
+        this.ws.onopen = () => { this.wsConnected = true; };
+        this.ws.onclose = () => {
+          this.wsConnected = false;
+          setTimeout(() => this.connectWS(), 3000);
+        };
+        this.ws.onerror = () => { this.wsConnected = false; };
+        this.ws.onmessage = e => {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'device_update') this.updateDevice(msg.device);
+          } catch {}
+        };
+        setInterval(() => {
+          if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send('ping');
+        }, 25000);
+      },
+
+      logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/login';
+      },
+
+      async addRoom() {
+        if (!this.newRoom.name.trim()) return;
+        const res = await this.api('/rooms/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.newRoom),
+        });
+        if (res?.ok) {
+          const room = await res.json();
+          room.devices = [];
+          this.rooms.push(room);
+          this.showAddRoom = false;
+          this.newRoom = { name: '', icon: 'home' };
+        }
+      },
+
+      async addDevice() {
+        if (!this.newDevice.name.trim() || !this.newDevice.room_id) return;
+        const res = await this.api('/devices/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.newDevice),
+        });
+        if (res?.ok) {
+          const device = await res.json();
+          const room = this.rooms.find(r => r.id === device.room_id);
+          if (room) room.devices.push(device);
+          this.showAddDevice = false;
+          this.newDevice = { name: '', type: 'LIGHT', room_id: null };
+        }
+      },
+
+      async deleteRoom(room) {
+        if (!confirm('Удалить комнату «' + room.name + '» и все её устройства?')) return;
+        const res = await this.api('/rooms/' + room.id, { method: 'DELETE' });
+        if (res?.status === 204) {
+          this.rooms = this.rooms.filter(r => r.id !== room.id);
+        }
+      },
+
+      async deleteDevice(device) {
+        if (!confirm('Удалить устройство «' + device.name + '»?')) return;
+        const res = await this.api('/devices/' + device.id, { method: 'DELETE' });
+        if (res?.status === 204) {
+          for (const room of this.rooms) {
+            room.devices = room.devices.filter(d => d.id !== device.id);
+          }
+        }
+      },
+
+      roomIcon(icon) {
+        return { sofa: '🛋️', bed: '🛏️', kitchen: '🍳', home: '🏠', bathroom: '🚿', garage: '🚗', garden: '🌿', office: '💼' }[icon] || '🏠';
+      },
+      deviceIcon(type) {
+        return { LIGHT: '💡', AC: '❄️', OUTLET: '🔌', CAMERA: '📷', TEMP_SENSOR: '🌡️', MOTION_SENSOR: '👁️' }[type] || '📱';
+      },
+      deviceLabel(type) {
+        return { LIGHT: 'Освещение', AC: 'Кондиционер', OUTLET: 'Розетка', CAMERA: 'Камера', TEMP_SENSOR: 'Температура', MOTION_SENSOR: 'Датчик движения' }[type] || type;
+      },
+      isControllable(type) { return ['LIGHT', 'AC', 'OUTLET', 'CAMERA'].includes(type); },
+      isSensor(type) { return ['TEMP_SENSOR', 'MOTION_SENSOR'].includes(type); },
+    };
+  }
+  </script>
+</body>
+</html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartHome — История действий</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+  <style>
+    [x-cloak] { display: none !important; }
+    .pulse-dot { animation: pdot 2s ease-in-out infinite; }
+    @keyframes pdot { 0%,100%{opacity:1} 50%{opacity:.35} }
+  </style>
+</head>
+<body class="bg-slate-900 text-white" x-data="historyPage()" x-init="init()">
+
+  <script>
+    const API_URL = "{{ API_URL }}";
+  </script>
+
+  <!-- SIDEBAR -->
+  <aside class="fixed inset-y-0 left-0 w-64 bg-slate-800 border-r border-slate-700/60 flex flex-col z-20">
+    <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-700/60">
+      <div class="w-10 h-10 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-xl flex-shrink-0">🏠</div>
+      <div>
+        <p class="font-bold text-white text-sm leading-tight">SmartHome</p>
+        <p class="text-xs text-slate-500">Умный дом</p>
+      </div>
+    </div>
+
+    <nav class="flex-1 px-3 py-4 space-y-1">
+      <a href="/dashboard" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-700/60 hover:text-white transition text-sm">
+        <span>📊</span> Панель управления
+      </a>
+      <a href="/history" class="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-600/15 text-blue-400 font-medium text-sm border border-blue-500/20">
+        <span>📋</span> История действий
+      </a>
+      <a href="http://localhost:8000/docs" target="_blank" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-700/60 hover:text-white transition text-sm">
+        <span>📖</span> API Документация
+      </a>
+    </nav>
+
+    <div class="px-3 pb-4 space-y-2 border-t border-slate-700/60 pt-3">
+      <div class="flex items-center gap-2 px-2 py-1">
+        <span class="w-2 h-2 rounded-full flex-shrink-0 pulse-dot bg-slate-500"></span>
+        <span class="text-xs text-slate-400">Режим просмотра логов</span>
+      </div>
+      <div x-show="user" x-cloak class="flex items-center gap-2.5 p-2.5 bg-slate-700/40 rounded-xl border border-slate-700/50">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center text-xs font-bold flex-shrink-0"
+             x-text="user?.username?.[0]?.toUpperCase()"></div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-white truncate leading-tight" x-text="user?.username"></p>
+          <p class="text-xs text-slate-400 leading-tight" x-text="user?.is_admin ? '👑 Администратор' : '👤 Гость'"></p>
+        </div>
+      </div>
+      <button @click="logout()" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-slate-400 hover:text-white hover:bg-slate-700/60 rounded-xl transition">
+        <span>🚪</span> Выйти
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="ml-64 min-h-screen p-8">
+
+    <div class="flex flex-wrap items-start justify-between gap-4 mb-8">
+      <div>
+        <h1 class="text-2xl font-bold text-white">История действий</h1>
+        <p class="text-slate-400 text-sm mt-0.5">Журнал событий системы умного дома</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span class="text-xs text-slate-500" x-text="'Записей: ' + logs.length"></span>
+        <button @click="reload()" :disabled="loading"
+                class="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl text-sm font-medium transition">
+          <span :class="loading ? 'animate-spin inline-block' : ''">↻</span> Обновить
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading -->
+    <div x-show="loading && logs.length === 0" x-cloak class="flex items-center justify-center py-24">
+      <div class="text-center">
+        <svg class="animate-spin h-10 w-10 text-blue-500 mx-auto mb-4" viewBox="0 0 24 24" fill="none">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+        </svg>
+        <p class="text-slate-400 text-sm">Загрузка истории...</p>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div x-show="logs.length > 0" class="bg-slate-800 rounded-2xl border border-slate-700/60 overflow-hidden">
+      <div class="grid grid-cols-12 gap-4 px-5 py-3 border-b border-slate-700/60">
+        <div class="col-span-3 text-xs font-medium text-slate-500 uppercase tracking-wider">Время</div>
+        <div class="col-span-3 text-xs font-medium text-slate-500 uppercase tracking-wider">Устройство</div>
+        <div class="col-span-4 text-xs font-medium text-slate-500 uppercase tracking-wider">Действие</div>
+        <div class="col-span-2 text-xs font-medium text-slate-500 uppercase tracking-wider">Источник</div>
+      </div>
+
+      <div class="divide-y divide-slate-700/40">
+        <template x-for="log in logs" :key="log.id">
+          <div class="grid grid-cols-12 gap-4 px-5 py-3 hover:bg-slate-700/20 transition items-center">
+            <div class="col-span-3">
+              <p class="text-sm text-white font-mono" x-text="formatDate(log.created_at)"></p>
+              <p class="text-xs text-slate-500 font-mono" x-text="formatTime(log.created_at)"></p>
+            </div>
+            <div class="col-span-3 flex items-center gap-2 min-w-0">
+              <span class="text-base flex-shrink-0" x-text="devices[log.device_id] ? deviceIcon(devices[log.device_id].type) : '📱'"></span>
+              <div class="min-w-0">
+                <p class="text-sm text-white truncate" x-text="devices[log.device_id]?.name || ('Устройство #' + log.device_id)"></p>
+                <p class="text-xs text-slate-500 truncate" x-text="devices[log.device_id] ? deviceLabel(devices[log.device_id].type) : ''"></p>
+              </div>
+            </div>
+            <div class="col-span-4 flex items-center gap-2">
+              <span class="text-sm flex-shrink-0" x-text="actionEmoji(log.action)"></span>
+              <span class="px-2.5 py-1 rounded-lg text-xs font-medium"
+                    :class="actionClass(log.action)"
+                    x-text="log.action"></span>
+            </div>
+            <div class="col-span-2">
+              <span class="px-2 py-1 rounded-lg text-xs"
+                    :class="log.user_id ? 'bg-blue-600/15 text-blue-400' : 'bg-slate-700/60 text-slate-400'"
+                    x-text="log.user_id ? '👤 Пользователь' : '🤖 Система'"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+
+      <div class="px-5 py-4 border-t border-slate-700/60 flex items-center justify-between">
+        <p class="text-xs text-slate-500" x-text="'Показано ' + logs.length + ' записей'"></p>
+        <button x-show="hasMore" @click="loadMore()" :disabled="loadingMore"
+                class="flex items-center gap-2 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 rounded-xl text-sm transition">
+          <span x-show="loadingMore" class="animate-spin inline-block">↻</span>
+          <span x-text="loadingMore ? 'Загрузка...' : 'Загрузить ещё'"></span>
+        </button>
+        <p x-show="!hasMore" class="text-xs text-slate-500">Все записи загружены</p>
+      </div>
+    </div>
+
+    <!-- Empty -->
+    <div x-show="!loading && logs.length === 0" x-cloak
+         class="flex flex-col items-center justify-center py-24 text-slate-600">
+      <span class="text-5xl mb-4">📭</span>
+      <p class="text-lg font-medium text-slate-500">История пуста</p>
+      <p class="text-sm mt-1 text-slate-600">Действия появятся после управления устройствами</p>
+    </div>
+  </main>
+
+  <script>
+  function historyPage() {
+    return {
+      user: null,
+      logs: [],
+      devices: {},
+      loading: true,
+      loadingMore: false,
+      hasMore: true,
+      offset: 0,
+      limit: 50,
+
+      async init() {
+        if (!localStorage.getItem("token")) { window.location.href = "/login"; return; }
+        await this.loadUser();
+        await this.loadDevices();
+        await this.loadLogs();
+      },
+
+      token() { return localStorage.getItem("token"); },
+
+      async api(path, opts = {}) {
+        try {
+          const res = await fetch(API_URL + path, {
+            ...opts,
+            headers: { "Authorization": "Bearer " + this.token(), ...opts.headers },
+          });
+          if (res.status === 401) { this.logout(); return null; }
+          return res;
+        } catch { return null; }
+      },
+
+      async loadUser() {
+        const res = await this.api("/auth/me");
+        if (res?.ok) this.user = await res.json();
+      },
+
+      async loadDevices() {
+        const res = await this.api("/devices/");
+        if (res?.ok) { const list = await res.json(); list.forEach(d => { this.devices[d.id] = d; }); }
+      },
+
+      async loadLogs() {
+        this.loading = true;
+        const res = await this.api("/logs/?limit=" + this.limit + "&offset=0");
+        if (res?.ok) {
+          const data = await res.json();
+          this.logs = data;
+          this.hasMore = data.length === this.limit;
+          this.offset = data.length;
+        }
+        this.loading = false;
+      },
+
+      async loadMore() {
+        if (this.loadingMore || !this.hasMore) return;
+        this.loadingMore = true;
+        const res = await this.api("/logs/?limit=" + this.limit + "&offset=" + this.offset);
+        if (res?.ok) {
+          const data = await res.json();
+          this.logs.push(...data);
+          this.hasMore = data.length === this.limit;
+          this.offset += data.length;
+        }
+        this.loadingMore = false;
+      },
+
+      async reload() { this.offset = 0; this.hasMore = true; await this.loadLogs(); },
+
+      logout() { localStorage.removeItem("token"); window.location.href = "/login"; },
+
+      formatDate(ts) { return new Date(ts).toLocaleDateString("ru-RU", { day:"2-digit", month:"2-digit", year:"numeric" }); },
+      formatTime(ts) { return new Date(ts).toLocaleTimeString("ru-RU", { hour:"2-digit", minute:"2-digit", second:"2-digit" }); },
+
+      actionEmoji(a) {
+        if (a.includes("turned on"))  return "✅";
+        if (a.includes("turned off")) return "⭕";
+        if (a.includes("температур") || a.includes("value")) return "🌡️";
+        return "📝";
+      },
+      actionClass(a) {
+        if (a.includes("turned on"))  return "bg-emerald-500/15 text-emerald-400";
+        if (a.includes("turned off")) return "bg-slate-700/60 text-slate-400";
+        if (a.includes("температур") || a.includes("value")) return "bg-amber-500/15 text-amber-400";
+        return "bg-blue-500/15 text-blue-400";
+      },
+      deviceIcon(type) {
+        return { LIGHT:"💡", AC:"❄️", OUTLET:"🔌", CAMERA:"📷", TEMP_SENSOR:"🌡️", MOTION_SENSOR:"👁️" }[type] || "📱";
+      },
+      deviceLabel(type) {
+        return { LIGHT:"Освещение", AC:"Кондиционер", OUTLET:"Розетка", CAMERA:"Камера", TEMP_SENSOR:"Температура", MOTION_SENSOR:"Датчик движения" }[type] || type;
+      },
+    };
+  }
+  </script>
+</body>
+</html>
