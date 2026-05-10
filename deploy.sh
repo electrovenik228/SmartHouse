@@ -5,7 +5,11 @@ echo "==> Собираем и запускаем контейнеры..."
 docker-compose up --build -d
 
 echo "==> Ждём запуска базы данных..."
-sleep 5
+until docker-compose exec db pg_isready -U smarthome -q; do
+  echo "   БД ещё не готова, ждём..."
+  sleep 2
+done
+echo "   БД готова."
 
 echo "==> Применяем миграции..."
 docker-compose exec backend alembic upgrade head
